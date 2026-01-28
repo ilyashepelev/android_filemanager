@@ -42,7 +42,17 @@ public class MainActivity extends AppCompatActivity {
 
     private static final String TAG = "FileManager";
 
-    ImageButton btnRequestPermission;
+    ImageButton btnRequestPermission, btnReplay, btnSort;
+
+
+    // В начало класса добавьте:
+    private static final int SORT_NAME_ASC = 0;
+    private static final int SORT_NAME_DESC = 1;
+    private static final int SORT_SIZE_ASC = 2;
+    private static final int SORT_SIZE_DESC = 3;
+    private static final int SORT_DATE_ASC = 4;
+    private static final int SORT_DATE_DESC = 5;
+    private int currentSortType = SORT_NAME_ASC;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -84,7 +94,115 @@ public class MainActivity extends AppCompatActivity {
 
         checkAndRequestPermissions();
 
+        btnReplay = findViewById(R.id.btnReplay);
+        btnReplay.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                loadFiles();
+            }
+        });
+
+
+        btnSort = findViewById(R.id.btnSort);
+        btnSort.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                showSortDialog();
+            }
+        });
+
     }
+    private void showSortDialog() {
+        String[] sortOptions = {
+                "По имени (А-Я)",
+                "По имени (Я-А)",
+                "По размеру (возр.)",
+                "По размеру (убыв.)",
+                "По дате (старые)",
+                "По дате (новые)"
+        };
+
+        new androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle("Сортировка")
+                .setSingleChoiceItems(sortOptions, currentSortType, (dialog, which) -> {
+                    currentSortType = which;
+                    sortFiles(currentSortType);
+                    dialog.dismiss();
+                })
+                .setNegativeButton("Отмена", null)
+                .show();
+    }
+    private void sortFiles(int sortType) {
+        if (fileList == null || fileList.size() == 0) return;
+
+        Collections.sort(fileList, new Comparator<File>() {
+            @Override
+            public int compare(File f1, File f2) {
+                // Всегда оставляем ".." наверху
+                if (f1.getName().equals("..")) return -1;
+                if (f2.getName().equals("..")) return 1;
+
+                boolean f1IsDir = f1.isDirectory() || f1.getPath().contains("|");
+                boolean f2IsDir = f2.isDirectory() || f2.getPath().contains("|");
+
+                // Если разные типы (папка/файл)
+                if (f1IsDir && !f2IsDir) return -1;
+                if (!f1IsDir && f2IsDir) return 1;
+
+                // Если одинаковые типы - сортируем по выбранному критерию
+                String realPath1 = f1.getPath().contains("|") ?
+                        f1.getPath().split("\\|")[0] : f1.getPath();
+                String realPath2 = f2.getPath().contains("|") ?
+                        f2.getPath().split("\\|")[0] : f2.getPath();
+
+                File realFile1 = new File(realPath1);
+                File realFile2 = new File(realPath2);
+
+                switch (sortType) {
+
+                    case SORT_NAME_ASC:
+                        return f1.getName().toLowerCase()
+                                .compareTo(f2.getName().toLowerCase());
+
+                    case SORT_NAME_DESC:
+                        return f2.getName().toLowerCase()
+                                .compareTo(f1.getName().toLowerCase());
+
+                    case SORT_SIZE_ASC:
+                        return Long.compare(realFile1.length(), realFile2.length());
+
+                    case SORT_SIZE_DESC:
+                        return Long.compare(realFile2.length(), realFile1.length());
+
+                    case SORT_DATE_ASC:
+                        return Long.compare(realFile1.lastModified(), realFile2.lastModified());
+
+                    case SORT_DATE_DESC:
+                        return Long.compare(realFile2.lastModified(), realFile1.lastModified());
+
+                    default:
+                        return f1.getName().toLowerCase()
+                                .compareTo(f2.getName().toLowerCase());
+                }
+            }
+        });
+
+        fileAdapter.notifyDataSetChanged();
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     @Override
     protected void onResume() {
@@ -532,21 +650,7 @@ public class MainActivity extends AppCompatActivity {
                 }
 
                 // Сортируем
-                Collections.sort(fileList, new Comparator<File>() {
-                    @Override
-                    public int compare(File f1, File f2) {
-                        if (f1.getName().equals("..")) return -1;
-                        if (f2.getName().equals("..")) return 1;
-
-                        boolean f1IsDir = f1.isDirectory() || f1.getPath().contains("|");
-                        boolean f2IsDir = f2.isDirectory() || f2.getPath().contains("|");
-
-                        if (f1IsDir && !f2IsDir) return -1;
-                        if (!f1IsDir && f2IsDir) return 1;
-
-                        return f1.getName().toLowerCase().compareTo(f2.getName().toLowerCase());
-                    }
-                });
+                sortFiles(currentSortType);
             }
         } catch (SecurityException e) {
             Log.e(TAG, "Security exception: " + e.getMessage());
@@ -684,7 +788,7 @@ public class MainActivity extends AppCompatActivity {
         switch (extension) {
             case "txt": return "text/plain";
             case "pdf": return "application/pdf";
-            case "jpg": case "jpeg": return "image/jpeg";
+            case "jpg": case "jpeg": case "JPG": return "image/jpeg";
             case "png": return "image/png";
             case "gif": return "image/gif";
             case "bmp": return "image/bmp";
